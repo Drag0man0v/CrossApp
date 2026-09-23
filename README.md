@@ -10,4 +10,4 @@
  dotnet build
  dotnet run --project src/Cli
  ## Середовище
- .NET SDK 10.0, Windows 11 x64 
+ .NET SDK 10.0, Windows 10 x64 
