@@ -13,11 +13,11 @@ public sealed record EnvironmentReport(
 
 public static class EnvironmentInfo
 {
-  #if NET10_0_OR_GREATER
+#if NET10_0_OR_GREATER
     private const string BuildNote = "збірка під net10.0";
-  #else
+#else
     private const string BuildNote = "збірка під net8.0";
-  #endif
+#endif
     public static EnvironmentReport Collect() => new(
         RuntimeInformation.OSDescription,
         RuntimeInformation.FrameworkDescription,
