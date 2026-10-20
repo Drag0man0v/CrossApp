@@ -1,3 +1,5 @@
+using Core.Domain;
+
 namespace Core.DTO;
 
 public record LoanDto(
@@ -5,4 +7,5 @@ public record LoanDto(
     string CopyId,
     string ReaderId,
     DateTime IssuedOn,
-    DateTime? ReturnedOn);
+    DateTime? ReturnedOn,
+    LoanStatus Status);

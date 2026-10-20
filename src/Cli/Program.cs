@@ -1,103 +1,162 @@
 ﻿
 using Core.Domain;
 using Core.DTO;
-
-Console.WriteLine("Сценарій 1: успіх");
-
-BookCopy copy = BookCopy.Create(
-    "C-001", "978-966-03-1234-5", "Кобзар",
-    "Т. Шевченко", 1840, "Поезія");
-
-Console.WriteLine(copy);
-
-Loan loan = Loan.Open(
-    "L-001", copy, "R-001", new DateTime(2026, 10, 1));
-
-Console.WriteLine(copy);
-Console.WriteLine(loan);
-
-loan.Close(new DateTime(2026, 10, 15));
-
-Console.WriteLine(copy);
-Console.WriteLine(loan);
+using Core.Import;
 
 
-Console.WriteLine();
-Console.WriteLine("Сценарій 2: порушення інваріантів");
+Console.WriteLine("Завдання 1: Імпорт даних");
 
-BookCopy copy2 = BookCopy.Create(
-    "C-002", "978-966-03-9999-9", "Лісова пісня",
-    "Леся Українка", 1911, "Драма");
+string path = "data/sample.csv";
 
-Loan loan2 = Loan.Open(
-    "L-002", copy2, "R-001", new DateTime(2026, 10, 1));
-
-TryDo("Повторна видача", () =>
-    Loan.Open("L-003", copy2, "R-002", new DateTime(2026, 10, 2)));
-
-TryDo("Порожній ISBN", () =>
-    BookCopy.Create("C-003", "", "Назва", null, 2000, "Проза"));
-
-TryDo("Порожній жанр", () =>
-    BookCopy.Create("C-003", "978-3", "Назва", null, 2000, ""));
-
-TryDo("Від'ємний рік", () =>
-    BookCopy.Create("C-004", "978-4", "Назва", null, -5, "Проза"));
-
-TryDo("Рік у майбутньому", () =>
-    BookCopy.Create("C-004", "978-4", "Назва", null, 3000, "Проза"));
-
-TryDo("Порожній читач", () =>
-    Loan.Open("L-004",
-        BookCopy.Create("C-005", "978-5", "Назва", null, 2000, "Проза"),
-        " ", new DateTime(2026, 10, 2)));
-
-TryDo("Повернення раніше видачі", () =>
-    loan2.Close(new DateTime(2026, 9, 1)));
-
-BookDto badBook = new BookDto(
-    "C-006", "", "Назва", null, 2000, "Проза");
-
-TryDo("FromDto: порожній ISBN", () =>
-    BookCopy.FromDto(badBook));
-
-LoanDto badLoan = new LoanDto(
-    "L-005", "C-002", "R-001",
-    new DateTime(2026, 10, 10),
-    new DateTime(2026, 10, 1));
-
-TryDo("FromDto: неправильна дата", () =>
-    Loan.FromDto(badLoan, copy2));
-
-LoanDto wrongCopy = new LoanDto(
-    "L-006", "C-999", "R-001",
-    new DateTime(2026, 10, 10), null);
-
-TryDo("FromDto: чужий примірник", () =>
-    Loan.FromDto(wrongCopy, copy2));
-
-Console.WriteLine("Стан після помилок:");
-Console.WriteLine(copy2);
-Console.WriteLine(loan2);
-
-loan2.Close(new DateTime(2026, 10, 10));
-
-TryDo("Повторне закриття видачі", () =>
-    loan2.Close(new DateTime(2026, 10, 11)));
-
-TryDo("Повернення книги, яка вже на полиці", () =>
-    copy2.Return());
-
-
-static void TryDo(string title, Action action)
+try
 {
-    try
+    ImportResult<BookDto> imported = BookCsvImporter.Load(path);
+
+    DomainImportResult result = CopyMapper.FromImportResult(imported);
+
+    Console.WriteLine("Імпортовано книг: " + result.Copies.Count);
+    Console.WriteLine("Кількість помилок: " + result.Errors.Count);
+
+    Console.WriteLine("\nСписок книг:");
+
+    foreach (BookCopy book in result.Copies)
     {
-        action();
-        Console.WriteLine(title + ": помилка не виникла!");
+        Console.WriteLine(book);
     }
-    catch (Exception ex)
+
+    Console.WriteLine("\nПомилки:");
+
+    foreach (string error in result.Errors)
     {
-        Console.WriteLine(title + ": " + ex.Message);
+        Console.WriteLine(error);
     }
+}
+catch (Exception ex)
+{
+    Console.WriteLine("Помилка читання файлу: " + ex.Message);
+}
+
+
+Console.WriteLine("\nЗавдання 2: Ліміт видач");
+
+LoanService service = new LoanService();
+
+for (int i = 1; i <= 5; i++)
+{
+    BookCopy copy = BookCopy.Create(
+        "C-" + i,
+        "978-" + i,
+        "Книга " + i,
+        "Автор",
+        2000 + i,
+        "Проза"
+    );
+
+    Loan loan = service.IssueCopy(
+        "L-" + i,
+        copy,
+        "R-001",
+        new DateTime(2026, 10, 1)
+    );
+
+    Console.WriteLine("Створено видачу: " + loan);
+}
+
+Console.WriteLine("Відкритих видач: " + service.Loans.Count);
+
+try
+{
+    BookCopy copy6 = BookCopy.Create(
+        "C-6",
+        "978-6",
+        "Книга 6",
+        "Автор",
+        2006,
+        "Проза"
+    );
+
+    service.IssueCopy(
+        "L-6",
+        copy6,
+        "R-001",
+        new DateTime(2026, 10, 2)
+    );
+}
+catch (InvalidOperationException ex)
+{
+    Console.WriteLine("Шоста видача заборонена: " + ex.Message);
+}
+
+
+Console.WriteLine("\nЗавдання 3: Статуси видач");
+
+// Створюємо першу книгу
+BookCopy book1 = BookCopy.Create(
+    "C-10",
+    "978-10",
+    "Кобзар",
+    "Т. Шевченко",
+    1840,
+    "Поезія"
+);
+
+// Відкриваємо видачу
+Loan loan1 = Loan.Open(
+    "L-10",
+    book1,
+    "R-002",
+    new DateTime(2026, 10, 1)
+);
+
+Console.WriteLine("Після видачі: " + loan1);
+
+// Повертаємо книгу
+loan1.Close(new DateTime(2026, 10, 15));
+
+Console.WriteLine("Після повернення: " + loan1);
+
+// Пробуємо закрити повторно
+try
+{
+    loan1.Close(new DateTime(2026, 10, 16));
+}
+catch (InvalidOperationException ex)
+{
+    Console.WriteLine("Повторне закриття заборонено: " + ex.Message);
+}
+
+
+// Створюємо другу книгу
+BookCopy book2 = BookCopy.Create(
+    "C-11",
+    "978-11",
+    "Лісова пісня",
+    "Леся Українка",
+    1911,
+    "Драма"
+);
+
+// Відкриваємо другу видачу
+Loan loan2 = Loan.Open(
+    "L-11",
+    book2,
+    "R-003",
+    new DateTime(2026, 10, 3)
+);
+
+Console.WriteLine("\nНова видача: " + loan2);
+
+// Позначаємо книгу втраченою
+loan2.MarkLost();
+
+Console.WriteLine("Після втрати: " + loan2);
+
+// Пробуємо повернути втрачену книгу
+try
+{
+    loan2.Close(new DateTime(2026, 10, 20));
+}
+catch (InvalidOperationException ex)
+{
+    Console.WriteLine("Повернення втраченої книги заборонено: " + ex.Message);
 }

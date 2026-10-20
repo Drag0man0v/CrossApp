@@ -1,3 +1,4 @@
+
 using Core.DTO;
 
 namespace Core.Domain;
@@ -9,97 +10,138 @@ public sealed class Loan
     public string ReaderId { get; }
     public DateTime IssuedOn { get; }
     public DateTime? ReturnedOn { get; private set; }
+    public LoanStatus Status { get; private set; }
 
-    public bool IsClosed => ReturnedOn is not null;
+    public bool IsClosed
+    {
+        get { return Status == LoanStatus.Closed; }
+    }
 
-    private Loan(string id, BookCopy copy, string readerId, DateTime issuedOn)
+    private Loan(string id, BookCopy copy, string readerId,
+        DateTime issuedOn, DateTime? returnedOn, LoanStatus status)
     {
         Id = id;
         Copy = copy;
         ReaderId = readerId;
         IssuedOn = issuedOn;
-    }
-
-    public static Loan Create(string id, BookCopy copy, string readerId, DateTime issuedOn, DateTime? returnedOn)
-    {
-       if (string.IsNullOrWhiteSpace(id))
-            throw new ArgumentException("Ідентифікатор видачі обов'язковий", nameof(id));
-        ArgumentNullException.ThrowIfNull(copy);
-        if (string.IsNullOrWhiteSpace(readerId))
-            throw new ArgumentException("Читач обов'язковий", nameof(readerId));
-        if (issuedOn == default)
-            throw new ArgumentOutOfRangeException(nameof(issuedOn), issuedOn,
-                "Дата видачі не задана");
-       if (returnedOn != null && returnedOn.Value < issuedOn)
-            throw new ArgumentOutOfRangeException(nameof(returnedOn), returnedOn.Value, $"Дата повернення не може бути раніше дати видачі ({issuedOn:d})");
-        return new Loan(id.Trim(), copy, readerId.Trim(), issuedOn);
-    }
-
-    public static Loan Open(string id, BookCopy copy, string readerId, DateTime issuedOn)
-        {
-            // Create перевіряє всі аргументи ДО зміни примірника.
-            var loan = Create(id, copy, readerId, issuedOn, null);
-            copy.Issue();
-            return loan;
-        }
-
-     public void Close(DateTime returnedOn)
-    {
-        if (IsClosed)
-            throw new InvalidOperationException(
-                $"Видача {Id} вже закрита {ReturnedOn:d}");
-        if (returnedOn < IssuedOn)
-            throw new ArgumentOutOfRangeException(nameof(returnedOn), returnedOn,
-                $"Дата повернення не може бути раніше дати видачі ({IssuedOn:d})");
-
-        // Зміна стану в одному місці, після всіх перевірок.
-        Copy.Return();
         ReturnedOn = returnedOn;
+        Status = status;
+    }
+
+    private static Loan Create(string id, BookCopy copy, string readerId,
+        DateTime issuedOn, DateTime? returnedOn, LoanStatus status)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Id не може бути порожнім");
+
+        if (copy == null)
+            throw new ArgumentNullException(nameof(copy));
+
+        if (string.IsNullOrWhiteSpace(readerId))
+            throw new ArgumentException("ReaderId не може бути порожнім");
+
+        if (issuedOn == default)
+            throw new ArgumentException("Дата видачі не задана");
+
+        if (!Enum.IsDefined(status))
+            throw new ArgumentException("Невідомий статус");
+
+        if (returnedOn != null && returnedOn.Value < issuedOn)
+            throw new ArgumentException("Дата повернення неправильна");
+
+        if (status == LoanStatus.Closed && returnedOn == null)
+            throw new ArgumentException("Немає дати повернення");
+
+        if (status != LoanStatus.Closed && returnedOn != null)
+            throw new ArgumentException("Неправильний статус видачі");
+
+        return new Loan(id.Trim(), copy, readerId.Trim(),
+            issuedOn, returnedOn, status);
+    }
+
+    public static Loan Open(string id, BookCopy copy,
+        string readerId, DateTime issuedOn)
+    {
+        Loan loan = Create(id, copy, readerId,
+            issuedOn, null, LoanStatus.Open);
+
+        copy.Issue();
+
+        return loan;
+    }
+
+
+public void Close(DateTime returnedOn)
+{
+    if (!IsAllowed(LoanStatus.Closed))
+        throw new InvalidOperationException("Видачу не можна закрити");
+
+    if (returnedOn < IssuedOn)
+        throw new ArgumentException("Неправильна дата повернення");
+
+    Copy.Return();
+
+    ReturnedOn = returnedOn;
+    Status = LoanStatus.Closed;
+}
+    
+
+    public void MarkLost()
+    {
+    if (!IsAllowed(LoanStatus.Lost))
+        throw new InvalidOperationException("Не можна позначити втраченою");
+
+    Status = LoanStatus.Lost;
     }
 
     public LoanDto ToDto()
     {
-    LoanDto dto = new LoanDto(
-        Id,
-        Copy.Id,
-        ReaderId,
-        IssuedOn,
-        ReturnedOn
-    );
-
-    return dto;
+        return new LoanDto(Id, Copy.Id, ReaderId,
+            IssuedOn, ReturnedOn, Status);
     }
 
     public static Loan FromDto(LoanDto dto, BookCopy copy)
     {
-    Loan loan = Create(
-        dto.Id,
-        copy,
-        dto.ReaderId,
-        dto.IssuedOn,
-        dto.ReturnedOn
-    );
+        if (dto == null)
+            throw new ArgumentNullException(nameof(dto));
 
-    return loan;
+        if (copy == null)
+            throw new ArgumentNullException(nameof(copy));
+
+        if (copy.Id != dto.CopyId)
+            throw new ArgumentException("Неправильний примірник книги");
+
+        return Create(dto.Id, copy, dto.ReaderId,
+            dto.IssuedOn, dto.ReturnedOn, dto.Status);
     }
-
-
 
     public override string ToString()
+    {
+        string result = Id + ": примірник " + Copy.Id +
+            ", читач " + ReaderId + ", " + Status;
+
+        if (ReturnedOn != null)
+        {
+            result += ", повернено " + ReturnedOn.Value.ToShortDateString();
+        }
+
+        return result;
+    }
+
+    
+private bool IsAllowed(LoanStatus newStatus)
 {
-    string status;
-
-    if (IsClosed)
+    return Status switch
     {
-        status = $"повернено {ReturnedOn:d}";
-    }
-    else
-    {
-        status = "не повернено";
-    }
+        LoanStatus.Open => newStatus == LoanStatus.Closed ||
+                           newStatus == LoanStatus.Lost,
 
-    return $"{Id}: примірник {Copy.Id}, читач {ReaderId}, {status}";
+        LoanStatus.Closed => false,
+
+        LoanStatus.Lost => false,
+
+        _ => false
+    };
 }
-
 
 }
