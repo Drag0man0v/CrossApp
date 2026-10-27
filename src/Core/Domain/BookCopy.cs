@@ -26,6 +26,7 @@ public sealed class BookCopy
         Author = author;
         Year = year;
         Genre = genre;
+        
     }
 
     public static BookCopy Create(string id, string isbn, string title,
@@ -76,7 +77,7 @@ public sealed class BookCopy
 
     public BookDto ToDto()
     {
-        BookDto dto = new BookDto(Id, Isbn, Title, Author, Year, Genre);
+        BookDto dto = new BookDto(Id, Isbn, Title, Author, Year, Genre, IsIssued);
         return dto;
     }
 
@@ -88,8 +89,12 @@ public sealed class BookCopy
             dto.Title,
             dto.Author,
             dto.Year,
-            dto.Genre
-        );
+            dto.Genre);
+            
+            if (dto.IsIssued)
+            {
+            copy.Issue();
+            }
 
         return copy;
     }

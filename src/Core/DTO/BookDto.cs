@@ -6,4 +6,5 @@ public record BookDto(
     string Title,
     string? Author,
     int Year,
-    string Genre);
+    string Genre,
+    bool IsIssued = false);

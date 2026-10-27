@@ -84,3 +84,21 @@ dotnet publish src/Cli -c Release -r win-x64 --self-contained false -o out/fd
 - Один читач не може мати більше 5 відкритих видач одночасно.
 - Перед новою видачею сервіс перевіряє кількість відкритих видач читача.
 - Якщо читач уже має 5 відкритих видач, створення шостої забороняється.
+
+
+Інтерфейс сховища: `ILibraryStore`.
+
+Реалізації:
+
+- `InMemoryLibraryStore` — зберігання в пам'яті;
+- `FileLibraryStore` — зберігання у JSON-файлі.
+
+Сервіс `LendingService` отримує сховище через конструктор.
+
+Запуск у режимі пам'яті:
+
+    dotnet run --project src/Cli
+
+Запуск у файловому режимі:
+
+    dotnet run --project src/Cli -- --file

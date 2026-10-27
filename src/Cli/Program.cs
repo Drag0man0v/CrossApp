@@ -1,153 +1,124 @@
-﻿using Core.Domain;
-using Core.DTO;
-using Core.Import;
+﻿using Core;
+using Core.Abstractions;
+using Core.Domain;
+using Core.Services;
+using Core.Storage;
 
+bool useFile = args.Contains("--file");
 
-Console.WriteLine("Успішний сценарій");
+string dataPath = Path.Combine(
+    AppContext.BaseDirectory,
+    "data",
+    "library.json"
+);
 
-BookCopy copy = BookCopy.Create(
-    "C-001", "978-966-03-1234-5", "Кобзар",
-    "Т. Шевченко", 1840, "Поезія");
+ILibraryStore store;
 
-Console.WriteLine(copy);
+if (useFile)
+{
+    store = new FileLibraryStore(dataPath);
+}
+else
+{
+    store = new InMemoryLibraryStore(SampleData.Books());
+}
 
-Loan loan = Loan.Open(
-    "L-001", copy, "R-001", new DateTime(2026, 10, 1));
+LendingService service = new LendingService(store);
 
-Console.WriteLine(copy);
-Console.WriteLine(loan);
+Console.WriteLine("Сховище: " + store.GetType().Name);
 
-Console.WriteLine("\nПорушення інваріантів");
+if (useFile)
+{
+    Console.WriteLine("Файл: " + dataPath);
+}
 
-TryDo("Порожній ISBN", () =>
-    BookCopy.Create("C-002", "", "Назва", null, 2000, "Проза"));
+Console.WriteLine();
+Console.WriteLine("Книги до додавання:");
 
-TryDo("Порожній жанр", () =>
-    BookCopy.Create("C-003", "978-3", "Назва", null, 2000, ""));
+foreach (BookCopy book in service.AllBooks())
+{
+    Console.WriteLine(book);
+}
 
-TryDo("Від'ємний рік", () =>
-    BookCopy.Create("C-004", "978-4", "Назва", null, -5, "Проза"));
+Console.WriteLine();
+Console.WriteLine("Видачі з попередніх запусків:");
 
-TryDo("Порожній читач", () =>
-    Loan.Open("L-004",
-        BookCopy.Create("C-005", "978-5", "Назва", null, 2000, "Проза"),
-        " ", new DateTime(2026, 10, 2)));
+foreach (Loan loan in service.AllLoans())
+{
+    Console.WriteLine(loan);
+}
 
-TryDo("FromDto: порожній ISBN", () =>
-    BookCopy.FromDto(new BookDto("C-006", "", "Назва", null, 2000, "Проза")));
+Console.WriteLine();
 
-TryDo("Повторна видача", () =>
-    Loan.Open("L-002", copy, "R-002", new DateTime(2026, 10, 2)));
+BookCopy newBook = service.AddBook(
+    "978-100",
+    "Нова книга",
+    "Автор",
+    2020,
+    "Проза"
+);
 
-TryDo("Повернення раніше видачі", () =>
-    loan.Close(new DateTime(2026, 9, 30)));
+Console.WriteLine("Додано книгу:");
+Console.WriteLine(newBook);
 
-Console.WriteLine("\nСтан після відмов - примірник досі виданий:");
-Console.WriteLine(copy);
-Console.WriteLine(loan);
+Loan newLoan = service.IssueCopy(
+    newBook.Id,
+    "R-001",
+    DateTime.Now
+);
 
-Console.WriteLine("\nУспішне повернення");
+Console.WriteLine();
+Console.WriteLine("Після видачі:");
+Console.WriteLine(newBook);
+Console.WriteLine(newLoan);
 
-loan.Close(new DateTime(2026, 10, 15));
+Console.WriteLine();
+Console.WriteLine("Пошук книги за ID:");
 
-Console.WriteLine(copy);
-Console.WriteLine(loan);
+BookCopy? foundBook = service.FindBook(newBook.Id);
 
-TryDo("Повторне закриття", () =>
-    loan.Close(new DateTime(2026, 10, 16)));
+if (foundBook != null)
+{
+    Console.WriteLine(foundBook);
+}
+else
+{
+    Console.WriteLine("Книгу не знайдено.");
+}
 
-Console.WriteLine("\nПеретворення в DTO і назад");
+Console.WriteLine();
+Console.WriteLine("Пошук видачі за ID:");
 
-var dto = copy.ToDto();
-BookCopy restored = BookCopy.FromDto(dto);
+Loan? foundLoan = service.FindLoan(newLoan.Id);
 
-Console.WriteLine(restored);
+if (foundLoan != null)
+{
+    Console.WriteLine(foundLoan);
+}
+else
+{
+    Console.WriteLine("Видачу не знайдено.");
+}
 
-// copy.IsIssued = false;
+service.ReturnCopy(newLoan.Id, DateTime.Now);
 
+Console.WriteLine();
+Console.WriteLine("Після повернення:");
+Console.WriteLine(newBook);
+Console.WriteLine(newLoan);
 
-Console.WriteLine("\nДодаткове 1: Імпорт даних");
-
-string path = "data/sample.csv";
+Console.WriteLine();
+Console.WriteLine("Перевірка помилки:");
 
 try
 {
-    ImportResult<BookDto> imported = BookCsvImporter.Load(path);
-    DomainImportResult result = CopyMapper.FromImportResult(imported);
-
-    Console.WriteLine("Імпортовано книг: " + result.Copies.Count);
-    Console.WriteLine("Кількість помилок: " + result.Errors.Count);
-
-    Console.WriteLine("\nСписок книг:");
-    foreach (BookCopy book in result.Copies)
-        Console.WriteLine(book);
-
-    Console.WriteLine("\nПомилки:");
-    foreach (string error in result.Errors)
-        Console.WriteLine(error);
-}
-catch (Exception ex)
-{
-    Console.WriteLine("Помилка читання файлу: " + ex.Message);
-}
-
-Console.WriteLine("\nДодаткове 2: Ліміт видач");
-
-LoanService service = new LoanService();
-
-for (int i = 1; i <= 5; i++)
-{
-    BookCopy c = BookCopy.Create(
-        "C-" + i, "978-" + i, "Книга " + i, "Автор", 2000 + i, "Проза");
-
-    Loan l = service.IssueCopy("L-" + i, c, "R-001", new DateTime(2026, 10, 1));
-    Console.WriteLine("Створено видачу: " + l);
-}
-
-Console.WriteLine("Відкритих видач: " + service.Loans.Count);
-
-TryDo("Шоста видача читачу", () =>
     service.IssueCopy(
-        "L-6",
-        BookCopy.Create("C-6", "978-6", "Книга 6", "Автор", 2006, "Проза"),
+        "НЕІСНУЮЧИЙ-ID",
         "R-001",
-        new DateTime(2026, 10, 2)));
-
-Console.WriteLine("\n=== Додаткове 3: Статуси видач ===");
-
-BookCopy book1 = BookCopy.Create(
-    "C-10", "978-10", "Кобзар", "Т. Шевченко", 1840, "Поезія");
-
-Loan loan1 = Loan.Open("L-10", book1, "R-002", new DateTime(2026, 10, 1));
-Console.WriteLine("Після видачі: " + loan1);
-
-loan1.Close(new DateTime(2026, 10, 15));
-Console.WriteLine("Після повернення: " + loan1);
-
-TryDo("Повторне закриття", () =>
-    loan1.Close(new DateTime(2026, 10, 16)));
-
-BookCopy book2 = BookCopy.Create(
-    "C-11", "978-11", "Лісова пісня", "Леся Українка", 1911, "Драма");
-
-Loan loan2 = Loan.Open("L-11", book2, "R-003", new DateTime(2026, 10, 3));
-Console.WriteLine("\nНова видача: " + loan2);
-
-loan2.MarkLost();
-Console.WriteLine("Після втрати: " + loan2);
-
-TryDo("Повернення втраченої книги", () =>
-    loan2.Close(new DateTime(2026, 10, 20)));
-
-static void TryDo(string title, Action action)
+        DateTime.Now
+    );
+}
+catch (InvalidOperationException ex)
 {
-    try
-    {
-        action();
-        Console.WriteLine($"{title}: очікуваний виняток не виник!");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"{title}: {ex.GetType().Name} - {ex.Message}");
-    }
+    Console.WriteLine("Помилка: " + ex.Message);
 }
