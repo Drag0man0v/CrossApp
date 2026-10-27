@@ -4,13 +4,18 @@ namespace Core.Domain;
 
 public sealed class BookCopy
 {
+    private bool _isIssued;
+
     public string Id { get; }
     public string Isbn { get; }
     public string Title { get; }
     public string? Author { get; }
     public int Year { get; }
     public string Genre { get; }
-    public bool IsIssued { get; private set; }
+    public bool IsIssued
+    {
+        get { return _isIssued; }
+    }
 
     private BookCopy(string id, string isbn, string title, string? author,
                      int year, string genre)
@@ -23,8 +28,7 @@ public sealed class BookCopy
         Genre = genre;
     }
 
-
-     public static BookCopy Create(string id, string isbn, string title,
+    public static BookCopy Create(string id, string isbn, string title,
                                   string? author, int year, string genre)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -35,6 +39,10 @@ public sealed class BookCopy
             throw new ArgumentException("Назва книги не може бути порожньою", nameof(title));
         if (string.IsNullOrWhiteSpace(genre))
             throw new ArgumentException("Жанр не може бути порожнім", nameof(genre));
+
+        if (year <= 0)
+            throw new ArgumentOutOfRangeException(nameof(year), year,
+                "Рік видання має бути додатним числом");
 
         int maxYear = DateTime.UtcNow.Year;
         if (year > maxYear)
@@ -54,7 +62,7 @@ public sealed class BookCopy
             throw new InvalidOperationException(
                 $"Примірник {Id} вже виданий, повторна видача неможлива");
 
-        IsIssued = true;
+        _isIssued = true;
     }
 
     public void Return()
@@ -63,31 +71,29 @@ public sealed class BookCopy
             throw new InvalidOperationException(
                 $"Примірник {Id} не був виданий, повернення неможливе");
 
-        IsIssued = false;
+        _isIssued = false;
     }
-
 
     public BookDto ToDto()
     {
-    BookDto dto = new BookDto(Id, Isbn, Title, Author, Year, Genre);
-    return dto;
+        BookDto dto = new BookDto(Id, Isbn, Title, Author, Year, Genre);
+        return dto;
     }
 
     public static BookCopy FromDto(BookDto dto)
     {
-    BookCopy copy = Create(
-        dto.Id,
-        dto.Isbn,
-        dto.Title,
-        dto.Author,
-        dto.Year,
-        dto.Genre
-    );
+        BookCopy copy = Create(
+            dto.Id,
+            dto.Isbn,
+            dto.Title,
+            dto.Author,
+            dto.Year,
+            dto.Genre
+        );
 
-    return copy;
+        return copy;
     }
 
     public override string ToString() =>
-    $"{Id} [{Isbn}] {Title} — {(IsIssued ? "видано" : "на полиці")}";
-
+        $"{Id} [{Isbn}] {Title} — {(IsIssued ? "видано" : "на полиці")}";
 }
