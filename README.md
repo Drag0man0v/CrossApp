@@ -102,3 +102,5 @@ dotnet publish src/Cli -c Release -r win-x64 --self-contained false -o out/fd
 Запуск у файловому режимі:
 
     dotnet run --project src/Cli -- --file
+
+    

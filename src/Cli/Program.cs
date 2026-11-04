@@ -6,22 +6,15 @@ using Core.Storage;
 
 bool useFile = args.Contains("--file");
 
-string dataPath = Path.Combine(
-    AppContext.BaseDirectory,
-    "data",
-    "library.json"
-);
+string dataPath = Path.Combine("library.json");
 
-ILibraryStore store;
+bool extra = args.Contains("--extra");
 
-if (useFile)
-{
-    store = new FileLibraryStore(dataPath);
-}
-else
-{
-    store = new InMemoryLibraryStore(SampleData.Books());
-}
+ILibraryStore store = extra
+    ? StoreFactory.Create(args)
+    : (useFile
+        ? new FileLibraryStore(dataPath)
+        : new InMemoryLibraryStore(SampleData.Books()));
 
 LendingService service = new LendingService(store);
 
@@ -121,4 +114,49 @@ try
 catch (InvalidOperationException ex)
 {
     Console.WriteLine("Помилка: " + ex.Message);
+}
+
+if (extra)
+{
+    Console.WriteLine();
+    Console.WriteLine("Додаткове завдання");
+
+    Console.WriteLine();
+    Console.WriteLine("Пошук: жанр Роман:");
+
+    IReadOnlyList<BookCopy> novels = service.SearchBooks(
+        b => string.Equals(b.Genre, "Роман", StringComparison.OrdinalIgnoreCase)
+    );
+
+    foreach (BookCopy b in novels)
+    {
+        Console.WriteLine(b);
+    }
+
+    Console.WriteLine("Знайдено: " + novels.Count);
+
+    Console.WriteLine();
+    Console.WriteLine("Пошук: книги до 1900 року на полиці:");
+
+    IReadOnlyList<BookCopy> old = service.SearchBooks(
+        b => b.Year < 1900 && !b.IsIssued
+    );
+
+    foreach (BookCopy b in old)
+    {
+        Console.WriteLine(b);
+    }
+
+    Console.WriteLine("Знайдено: " + old.Count);
+
+    if (store is CachingLibraryStore cache)
+    {
+        int before = cache.Hits;
+
+        service.AllBooks();
+        service.AllBooks();
+
+        Console.WriteLine();
+        Console.WriteLine("Звернень до кешу за два виклики AllBooks: " + (cache.Hits - before));
+    }
 }

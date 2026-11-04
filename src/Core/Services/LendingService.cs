@@ -129,4 +129,14 @@ public sealed class LendingService
     {
         return _store.GetLoanById(id);
     }
+
+     public IReadOnlyList<BookCopy> SearchBooks(Func<BookCopy, bool> predicate)
+    {
+        if (predicate == null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        return _store.ListBooks().Where(predicate).ToList();
+    }
 }
