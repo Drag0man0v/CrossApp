@@ -1,16 +1,30 @@
 using Core.Abstractions;
 using Core.Domain;
+using Core.Events;
+using Core.Notifications;
 
 namespace Core.Services;
 
 public sealed class LendingService
 {
     private const int MaxOpenLoans = 5;
+    public const int LoanDays = 14;
 
     private readonly ILibraryStore _store;
+    private readonly INotificationSink? _sink;   // додаткове завдання
 
-    public LendingService(ILibraryStore store)
+    public event EventHandler<LibraryChangedEventArgs>? Changed;
+
+    private void OnChanged(string copyId, LibraryChangeKind kind,
+                           string? readerId = null, DateTime? dueDate = null)
     {
+        Changed?.Invoke(this, new LibraryChangedEventArgs(copyId, kind, readerId, dueDate));
+       _sink?.Notify(kind + " " + copyId);   // додаткове завдання
+    }
+
+    public LendingService(ILibraryStore store, INotificationSink? sink = null)
+    {
+        _sink = sink;
         if (store == null)
         {
             throw new ArgumentNullException(nameof(store));
@@ -38,7 +52,7 @@ public sealed class LendingService
         );
 
         _store.AddBook(book);
-
+        OnChanged(book.Id, LibraryChangeKind.BookAdded);
         return book;
     }
 
@@ -90,7 +104,7 @@ public sealed class LendingService
         );
 
         _store.AddLoan(newLoan);
-
+        OnChanged(book.Id, LibraryChangeKind.CopyIssued, reader, issuedOn.AddDays(LoanDays));
         return newLoan;
     }
 
@@ -108,6 +122,7 @@ public sealed class LendingService
         loan.Close(returnedOn);
 
         _store.SaveChanges();
+        OnChanged(loan.Copy.Id, LibraryChangeKind.CopyReturned, loan.ReaderId);
     }
 
     public IReadOnlyList<BookCopy> AllBooks()

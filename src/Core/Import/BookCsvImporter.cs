@@ -40,6 +40,17 @@ public static class BookCsvImporter
         return new ImportResult<BookDto>(items, errors);
     }
 
+    public static ImportResult<BookDto> Load(string path, Action<string> onSkipped)
+    {
+        var result = Load(path);
+
+        foreach (string error in result.Errors)
+        {
+            onSkipped(error);
+        }
+
+        return result;
+    }
     private static ParseOutcome ParseLine(string line)
     {
         string[] parts = line.Split(Separator, StringSplitOptions.TrimEntries);

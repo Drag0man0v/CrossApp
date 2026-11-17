@@ -6,7 +6,7 @@ static class StoreFactory
 {
     public static ILibraryStore Create(string[] args)
     {
-        string dataPath = Path.Combine("library.json");
+        string dataPath = "library.json";
 
         ILibraryStore store = args.Contains("--file")
             ? new FileLibraryStore(dataPath)
