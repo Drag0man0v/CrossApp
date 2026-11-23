@@ -89,7 +89,7 @@ public sealed class LendingService
 
         if (count >= MaxOpenLoans)
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 "Читач уже має 5 відкритих видач."
             );
         }
@@ -154,4 +154,28 @@ public sealed class LendingService
 
         return _store.ListBooks().Where(predicate).ToList();
     }
+
+    public async Task<int> ImportAsync(ICatalogImporter importer, string path,
+    CancellationToken ct = default)
+{
+    ArgumentNullException.ThrowIfNull(importer);
+    ct.ThrowIfCancellationRequested();
+ 
+    IReadOnlyList<BookCopy> items = await importer.LoadAsync(path, ct);
+ 
+    int added = 0;
+    foreach (BookCopy item in items)
+    {
+        ct.ThrowIfCancellationRequested();
+ 
+        if (_store.GetBookById(item.Id) is not null) continue;   // ідемпотентність імпорту
+ 
+        _store.AddBook(item);
+        OnChanged(item.Id, LibraryChangeKind.BookAdded);
+        added++;
+    }
+ 
+    return added;
+}
+
 }

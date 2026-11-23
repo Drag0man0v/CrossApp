@@ -74,7 +74,7 @@ public sealed class Loan
 public void Close(DateTime returnedOn)
 {
     if (!IsAllowed(LoanStatus.Closed))
-        throw new InvalidOperationException("Видачу не можна закрити");
+        throw new DomainException("Видачу не можна закрити");
 
     if (returnedOn < IssuedOn)
         throw new ArgumentException("Неправильна дата повернення");
@@ -89,7 +89,7 @@ public void Close(DateTime returnedOn)
     public void MarkLost()
     {
     if (!IsAllowed(LoanStatus.Lost))
-        throw new InvalidOperationException("Не можна позначити втраченою");
+        throw new DomainException("Не можна позначити втраченою");
 
     Status = LoanStatus.Lost;
     }

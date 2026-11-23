@@ -120,4 +120,20 @@ dotnet publish src/Cli -c Release -r win-x64 --self-contained false -o out/fd
 Синтаксис запитів більше нагадує SQL і може бути зрозумілішим для запитів із групуванням, об'єднанням та фільтрацією даних.
 
 Висновок: обидва синтаксиси дозволяють реалізувати однакову логіку. Методний синтаксис у цьому проєкті є компактнішим, тому він зручний для звітів. Водночас синтаксис запитів є альтернативним способом запису LINQ і може бути читабельнішим для складних запитів із кількома джерелами даних.
-    
+
+
+## LAB8
+ 
+Тести (проєкт tests/Core.Tests посилається лише на Core):
+ 
+    dotnet test
+ 
+Імпорт з JSON (асинхронний, з Ctrl+C):
+ 
+    dotnet run --project src/Cli -- import data/books.json
+    dotnet run --project src/Cli -- import data/bad.json
+ 
+Перевірка скасування:
+ 
+    dotnet run --project src/Cli -- import data/books.json --delay=5000
+    (натиснути Ctrl+C) -> Імпорт скасовано.

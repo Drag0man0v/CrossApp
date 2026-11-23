@@ -142,6 +142,31 @@ if (command != null)
             Console.WriteLine($"З ToList усередині ланцюжка:  {sw.ElapsedMilliseconds} мс");
             break;
 
+        case "import":
+        {
+            string importPath = args.Where(a => !a.StartsWith("--")).Skip(1).FirstOrDefault()
+                                ?? Path.Combine("data", "books.json");
+            int importDelayMs = int.TryParse(
+                args.FirstOrDefault(a => a.StartsWith("--delay="))?.Substring(8), out int importDms) ? importDms : 0;
+ 
+            using var importCts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, ea) => { ea.Cancel = true; importCts.Cancel(); };
+            // для демонстрації таймауту: importCts.CancelAfter(TimeSpan.FromSeconds(2));
+ 
+            ICatalogImporter importSource = new JsonCatalogImporter();
+            if (importDelayMs > 0) importSource = new DelayedImporter(importSource, importDelayMs);
+ 
+            try
+            {
+                int importAdded = await service.ImportAsync(importSource, importPath, importCts.Token);
+                Console.WriteLine($"Імпортовано записів: {importAdded}");
+            }
+            catch (OperationCanceledException) { Console.WriteLine("Імпорт скасовано."); }
+            catch (DomainException ex) { Console.WriteLine($"Дані відхилено: {ex.Message}"); }
+            catch (FileNotFoundException) { Console.WriteLine($"Файл не знайдено: {importPath}"); }
+            catch (IOException ex) { Console.WriteLine($"Помилка читання файлу: {ex.Message}"); }
+            break;
+        }
 
         default:
             Console.WriteLine("report-top | report-overdue | report-genres | report-sum | report-lazy | report-empty");
@@ -303,10 +328,11 @@ try
 {
     service.ReturnCopy(labLoan.Id, DateTime.Now); // видача вже закрита
 }
-catch (InvalidOperationException ex)
+catch (DomainException ex)
 {
     Console.WriteLine("Помилка: " + ex.Message);
 }
+
 
 Console.WriteLine($"Подій отримано: {changes} (після відмов не змінилось)");
 
