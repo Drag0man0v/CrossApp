@@ -2,6 +2,7 @@ using System.Text.Json;
 using Core.Abstractions;
 using Core.Domain;
 using Core.DTO;
+using System.Text.Encodings.Web;
 
 namespace Core.Storage;
 
@@ -14,6 +15,14 @@ public sealed class FileLibraryStore : ILibraryStore
     private readonly Dictionary<string, Loan> _loans;
 
     private bool _loaded;
+
+    private static readonly JsonSerializerOptions Options = new()
+{
+    WriteIndented = true,
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    PropertyNameCaseInsensitive = true,
+    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+};
 
     public FileLibraryStore(string path)
     {
@@ -41,8 +50,19 @@ public sealed class FileLibraryStore : ILibraryStore
         {
             string json = File.ReadAllText(_path);
 
-            LibraryDataDto? data =
-                JsonSerializer.Deserialize<LibraryDataDto>(json);
+            LibraryDataDto? data;
+
+            try
+            {
+                data = JsonSerializer.Deserialize<LibraryDataDto>(json, Options);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException(
+                    "Файл даних пошкоджено: " + _path + ". " + ex.Message,
+                    ex
+                );
+            }
 
             if (data != null)
             {
@@ -191,11 +211,10 @@ public sealed class FileLibraryStore : ILibraryStore
             data.Loans.Add(loan.ToDto());
         }
 
-        JsonSerializerOptions options = new JsonSerializerOptions();
-        options.WriteIndented = true;
+        string json = JsonSerializer.Serialize(data, Options);
 
-        string json = JsonSerializer.Serialize(data, options);
-
-        File.WriteAllText(_path, json);
+        string tmp = _path + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, _path, overwrite: true);
     }
 }

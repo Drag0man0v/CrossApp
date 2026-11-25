@@ -8,11 +8,11 @@ namespace Core.Services;
 public sealed class LendingService
 {
     private const int MaxOpenLoans = 5;
-    public const int LoanDays = 14;
+    private const int DefaultLoanDays = 14;
+    public int LoanDays { get; }
 
     private readonly ILibraryStore _store;
     private readonly INotificationSink? _sink;   // додаткове завдання
-
     public event EventHandler<LibraryChangedEventArgs>? Changed;
 
     private void OnChanged(string copyId, LibraryChangeKind kind,
@@ -22,17 +22,23 @@ public sealed class LendingService
        _sink?.Notify(kind + " " + copyId);   // додаткове завдання
     }
 
-    public LendingService(ILibraryStore store, INotificationSink? sink = null)
+   public LendingService(ILibraryStore store, INotificationSink? sink = null, int loanDays = DefaultLoanDays)
     {
-        _sink = sink;
         if (store == null)
         {
             throw new ArgumentNullException(nameof(store));
         }
 
-        _store = store;
-    }
+        if (loanDays <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(loanDays), "Кількість днів має бути більшою за 0.");
+        }
 
+        _store = store;
+        _sink = sink;
+        LoanDays = loanDays;
+    }
+    
     public BookCopy AddBook(
         string isbn,
         string title,

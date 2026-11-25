@@ -19,4 +19,20 @@ static class StoreFactory
 
         return store;
     }
+
+
+    public static ILibraryStore Create(string[] args, string dataPath)
+    {
+
+        ILibraryStore store = args.Contains("--file")
+            ? new FileLibraryStore(dataPath)
+            : new InMemoryLibraryStore(SampleData.Books());
+
+        if (args.Contains("--cache"))
+        {
+            return new CachingLibraryStore(store);
+        }
+
+        return store;
+    }
 }

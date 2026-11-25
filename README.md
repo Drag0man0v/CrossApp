@@ -137,3 +137,12 @@ dotnet publish src/Cli -c Release -r win-x64 --self-contained false -o out/fd
  
     dotnet run --project src/Cli -- import data/books.json --delay=5000
     (натиснути Ctrl+C) -> Імпорт скасовано.
+
+## LAB9
+| Ключ у конфігурації    | Змінна середовища                | Значення в appsettings.json |
+|------------------------|----------------------------------|-----------------------------|
+| `EnvironmentName`      | `CROSSAPP_EnvironmentName`       | `Development`               |
+| `Logging:MinimumLevel` | `CROSSAPP_Logging__MinimumLevel` | `Information`               |
+| `Storage:DataPath`     | `CROSSAPP_Storage__DataPath`     | `data`                      |
+| `Storage:FileName`     | `CROSSAPP_Storage__FileName`     | `library.json`              |
+| `Library:LoanDays`     | `CROSSAPP_Library__LoanDays`     | `14`                        |

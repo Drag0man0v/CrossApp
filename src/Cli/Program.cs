@@ -8,20 +8,52 @@ using Core.Import;
 using Core.Notifications;
 using Core.Reports;
 using System.Diagnostics;
+using System.Reflection;
+using Core.Configuration;
+using Microsoft.Extensions.Configuration;
 
 bool useFile = args.Contains("--file");
 
-string dataPath = Path.Combine("library.json");
+string envName = Environment.GetEnvironmentVariable("CROSSAPP_ENVIRONMENT") ?? "Development";
+
+IConfigurationRoot config = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile($"appsettings.{envName}.json", optional: true)
+    .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+    .AddEnvironmentVariables(prefix: "CROSSAPP_")
+    .AddCommandLine(args)
+    .Build();
+
+AppOptions options = config.Get<AppOptions>() ?? new AppOptions();
+
+
+string? legacyPath = Environment.GetEnvironmentVariable("CROSSAPP_DATA_PATH");
+StorageOptions storage = new StorageOptions
+{
+    DataPath = string.IsNullOrWhiteSpace(legacyPath) ? options.Storage.DataPath : legacyPath,
+    FileName = options.Storage.FileName
+};
+
+string dataPath = storage.ResolveFullPath(AppContext.BaseDirectory);
+string? apiKey = config["Integration:ApiKey"];
+
+void PrintConfig()
+{
+    Console.WriteLine($"Середовище : {envName}, рівень логу: {options.Logging.MinimumLevel}");
+    Console.WriteLine($"Файл даних : {dataPath}");
+    Console.WriteLine(apiKey is null ? "ApiKey: не заданий" : $"ApiKey: присутній, довжина {apiKey.Length}");
+}
 
 bool extra = args.Contains("--extra");
 
 ILibraryStore store = extra
-    ? StoreFactory.Create(args)
+    ? StoreFactory.Create(args, dataPath)
     : (useFile
         ? new FileLibraryStore(dataPath)
         : new InMemoryLibraryStore(SampleData.Books()));
 
-LendingService service = new LendingService(store);
+LendingService service = new LendingService(store, loanDays: options.Library.LoanDays);
 
 string? command = args.FirstOrDefault(a => !a.StartsWith("--"));
 
@@ -60,15 +92,29 @@ if (command != null)
     var loans = service.AllLoans();
     DateTime today = DateTime.Today;
 
+    try
+    {
     switch (command)
     {
+        case "config":
+            PrintConfig();
+            break;
+
+        case "export":
+            PrintConfig();
+            string exportPath = Path.Combine(Path.GetDirectoryName(dataPath)!, "export.json");
+            int exported = BookJsonExporter.Save(books, exportPath);
+            Console.WriteLine($"Експортовано {exported} записів у {exportPath}");
+            Console.WriteLine($"Базова директорія: {AppContext.BaseDirectory}");
+            break;
+
         case "report-top":
             foreach (var r in ReportService.TopReaders(loans, 5))
                 Console.WriteLine($" {r.ReaderId,-8} видач: {r.Loans,3}");
             break;
 
         case "report-overdue":
-            foreach (var o in ReportService.Overdue(loans, today, LendingService.LoanDays))
+            foreach (var o in ReportService.Overdue(loans, today, service.LoanDays))
                 Console.WriteLine($" {o.CopyId,-6} {o.Title,-24} {o.ReaderId,-6} до {o.DueDate:dd.MM.yyyy}  прострочено на {o.DaysOverdue,3} дн.");
             break;
 
@@ -96,7 +142,7 @@ if (command != null)
         case "report-empty":
             var none = new List<BookCopy>();
             var noLoans = new List<Loan>();
-            Console.WriteLine($"TopReaders: {ReportService.TopReaders(noLoans, 5).Count}, Overdue: {ReportService.Overdue(noLoans, today, LendingService.LoanDays).Count}, ByGenre: {ReportService.ByGenre(none).Count}");
+            Console.WriteLine($"TopReaders: {ReportService.TopReaders(noLoans, 5).Count}, Overdue: {ReportService.Overdue(noLoans, today, service.LoanDays).Count}, ByGenre: {ReportService.ByGenre(none).Count}");
             var e0 = ReportService.Totals(none);
             Console.WriteLine($"Totals: {e0.Copies}, {e0.Titles}, {e0.Issued}, {e0.AvgCopiesPerTitle:F2}");
             break;
@@ -145,7 +191,7 @@ if (command != null)
         case "import":
         {
             string importPath = args.Where(a => !a.StartsWith("--")).Skip(1).FirstOrDefault()
-                                ?? Path.Combine("data", "books.json");
+                                ?? Path.Combine(AppContext.BaseDirectory, "data", "books.json");
             int importDelayMs = int.TryParse(
                 args.FirstOrDefault(a => a.StartsWith("--delay="))?.Substring(8), out int importDms) ? importDms : 0;
  
@@ -169,8 +215,13 @@ if (command != null)
         }
 
         default:
-            Console.WriteLine("report-top | report-overdue | report-genres | report-sum | report-lazy | report-empty");
+            Console.WriteLine("config | export | import | report-top | report-overdue | report-genres | report-sum | report-lazy | report-empty | report-extra | report-bench");
             break;
+    }
+    }
+    catch (InvalidOperationException ex)
+    {
+        Console.WriteLine("Помилка: " + ex.Message);
     }
 
     return;
@@ -416,7 +467,7 @@ if (extra)
 
     int skipped = 0;
     BookCsvImporter.Load(
-        Path.Combine("data", "sample.csv"),
+        Path.Combine(AppContext.BaseDirectory, "data", "sample.csv"),
         message =>
         {
             skipped++;
